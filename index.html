@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Transporte - Sabritas & Mixing</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-analytics-compat.js"></script>
+
+    <style>
+        body { background-color: #f8fafc; font-family: system-ui, -apple-system, sans-serif; }
+        .loader { border: 3px solid #f3f3f3; border-top: 3px solid #e11d48; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .fade-in { animation: fadeIn 0.2s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body>
+    <div id="root">
+        <div style="height: 100vh; display: flex; align-items: center; justify-content: center; color: #64748b;">
+            Cargando Dashboard...
+        </div>
+    </div>
+
+    <script type="text/babel">
+        const { useState, useMemo, useEffect } = React;
+        const { createRoot } = ReactDOM;
+
+        // --- ICONOS ---
+        const Icons = {
+            Truck: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="16" height="13" x="1" y="5" rx="2" /><polygon points="16 8 20 8 23 11 23 16 16 16 16 8" /><circle cx="5.5" cy="18.5" r="2.5" /><circle cx="18.5" cy="18.5" r="2.5" /></svg>,
+            Plus: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>,
+            Trash2: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>,
+            Edit: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>,
+            AlertTriangle: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>,
+            MessageSquare: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>,
+            X: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>,
+            CloudUpload: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m16 16-4-4-4 4"/></svg>,
+            BarChart2: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" x2="18" y1="20" y2="10"/><line x1="12" x2="12" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="14"/></svg>,
+            PieChart: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>,
+            Clock: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
+            AlertOctagon: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>,
+            Activity: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>,
+            ArrowUp: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m18 15-6-6-6 6"/></svg>,
+            ArrowDown: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>,
+            Minus: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/></svg>,
+            Lock: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>,
+            Unlock: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>,
+            LogOut: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>,
+            Shield: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>,
+            Coffee: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" x2="6" y1="1" y2="4"/><line x1="10" x2="10" y1="1" y2="4"/><line x1="14" x2="14" y1="1" y2="4"/></svg>
+        };
+
+        // --- FIREBASE SETUP UPDATED ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyBC9o8VZYfrMvhL2MFhlUxe36U2-HBlENw",
+            authDomain: "pepsico-1dac0.firebaseapp.com",
+            projectId: "pepsico-1dac0",
+            storageBucket: "pepsico-1dac0.firebasestorage.app",
+            messagingSenderId: "90221461845",
+            appId: "1:90221461845:web:99c7366fd6ef2128feafdc",
+            measurementId: "G-L8PLBCKQVX"
+        };
+
+        let db;
+        try {
+            if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+            db = firebase.firestore();
+        } catch (error) { console.error("Error Firebase:", error); }
+
+        // --- DATOS DEMO (ACTUALIZADOS CON SABRITAS Y MIXING) ---
+        const DEMO_INCIDENTS = [
+            { date: '18/11/25', plant: 'Sabritas', shift: 'T1', imp: 1, noImp: 0, lateStarts: 3, serviceLevel: 94.0, safetyScore: 92, breaks: 2, accidents: 1, causeImpSleep: 1, causeImpAccident: 0, causeImpRoute: 0, causeImpMech: 0, causeNoImpTraffic: 0, causeNoImpWeather: 0, causeNoImpClosed: 0, causeNoImpOther: 0 }, 
+            { date: '25/11/25', plant: 'Sabritas', shift: 'T1', imp: 0, noImp: 2, lateStarts: 1, serviceLevel: 97.5, safetyScore: 98, breaks: 5, accidents: 0, causeImpSleep: 0, causeImpAccident: 0, causeImpRoute: 0, causeImpMech: 0, causeNoImpTraffic: 2, causeNoImpWeather: 0, causeNoImpClosed: 0, causeNoImpOther: 0 }, 
+            { date: '01/12/25', plant: 'Sabritas', shift: 'T1', imp: 2, noImp: 5, lateStarts: 2, serviceLevel: 98.0, safetyScore: 95, breaks: 4, accidents: 0, causeImpSleep: 1, causeImpAccident: 0, causeImpRoute: 0, causeImpMech: 1, causeNoImpTraffic: 4, causeNoImpWeather: 0, causeNoImpClosed: 1, causeNoImpOther: 0 },
+            { date: '08/12/25', plant: 'Sabritas', shift: 'T1', imp: 0, noImp: 13, lateStarts: 1, serviceLevel: 98.5, safetyScore: 99, breaks: 6, accidents: 0, causeImpSleep: 0, causeImpAccident: 0, causeImpRoute: 0, causeImpMech: 0, causeNoImpTraffic: 10, causeNoImpWeather: 0, causeNoImpClosed: 0, causeNoImpOther: 3 },
+            { date: '09/12/25', plant: 'Sabritas', shift: 'T1', imp: 0, noImp: 3, lateStarts: 0, serviceLevel: 99.2, safetyScore: 100, breaks: 5, accidents: 0, causeImpSleep: 0, causeImpAccident: 0, causeImpRoute: 0, causeImpMech: 0, causeNoImpTraffic: 3, causeNoImpWeather: 0, causeNoImpClosed: 0, causeNoImpOther: 0 },
+            { date: '09/12/25', plant: 'Mixing', shift: 'T2', imp: 0, noImp: 2, lateStarts: 2, serviceLevel: 97.8, safetyScore: 96, breaks: 3, accidents: 0, causeImpSleep: 0, causeImpAccident: 0, causeImpRoute: 0, causeImpMech: 0, causeNoImpTraffic: 1, causeNoImpWeather: 0, causeNoImpClosed: 1, causeNoImpOther: 0 },
+            { date: '10/12/25', plant: 'Mixing', shift: 'T1', imp: 0, noImp: 3, lateStarts: 0, serviceLevel: 99.5, safetyScore: 100, breaks: 6, accidents: 0, causeImpSleep: 0, causeImpAccident: 0, causeImpRoute: 0, causeImpMech: 0, causeNoImpTraffic: 1, causeNoImpWeather: 2, causeNoImpClosed: 0, causeNoImpOther: 0 },
+            { date: '10/12/25', plant: 'Sabritas', shift: 'T2', imp: 0, noImp: 1, lateStarts: 0, serviceLevel: 99.0, safetyScore: 98, breaks: 4, accidents: 1, causeImpSleep: 0, causeImpAccident: 0, causeImpRoute: 0, causeImpMech: 0, causeNoImpTraffic: 1, causeNoImpWeather: 0, causeNoImpClosed: 0, causeNoImpOther: 0 },
+            { date: '11/12/25', plant: 'Sabritas', shift: 'T1', imp: 3, noImp: 0, lateStarts: 1, serviceLevel: 96.5, safetyScore: 88, breaks: 1, accidents: 0, causeImpSleep: 1, causeImpAccident: 0, causeImpRoute: 1, causeImpMech: 1, causeNoImpTraffic: 0, causeNoImpWeather: 0, causeNoImpClosed: 0, causeNoImpOther: 0 },
+            { date: '11/12/25', plant: 'Mixing', shift: 'T2', imp: 0, noImp: 4, lateStarts: 3, serviceLevel: 95.0, safetyScore: 94, breaks: 2, accidents: 0, causeImpSleep: 0, causeImpAccident: 0, causeImpRoute: 0, causeImpMech: 0, causeNoImpTraffic: 2, causeNoImpWeather: 0, causeNoImpClosed: 2, causeNoImpOther: 0 },
+            { date: '13/12/25', plant: 'Mixing', shift: 'T2', imp: 0, noImp: 13, lateStarts: 0, serviceLevel: 98.0, safetyScore: 97, breaks: 5, accidents: 0, causeImpSleep: 0, causeImpAccident: 0, causeImpRoute: 0, causeImpMech: 0, causeNoImpTraffic: 10, causeNoImpWeather: 0, causeNoImpClosed: 0, causeNoImpOther: 3 },
+            { date: '08/12/25', plant: 'Mixing', shift: 'T1', imp: 0, noImp: 7, lateStarts: 0, serviceLevel: 99.0, safetyScore: 100, breaks: 7, accidents: 0, causeImpSleep: 0, causeImpAccident: 0, causeImpRoute: 0, causeImpMech: 0, causeNoImpTraffic: 5, causeNoImpWeather: 2, causeNoImpClosed: 0, causeNoImpOther: 0 },
+            { date: '08/12/25', plant: 'Sabritas', shift: 'T2', imp: 6, noImp: 0, lateStarts: 1, serviceLevel: 92.5, safetyScore: 85, breaks: 0, accidents: 1, causeImpSleep: 4, causeImpAccident: 1, causeImpRoute: 1, causeImpMech: 0, causeNoImpTraffic: 0, causeNoImpWeather: 0, causeNoImpClosed: 0, causeNoImpOther: 0 },
+        ];
+        const DEMO_COMPLAINTS = [
+            { date: '01/12/25', plant: 'Sabritas', route: 'Ruta 1', issue: 'Retraso', detail: 'Llegó 15 mins tarde a la parada', action: 'Acta Admin', source: 'Laborales', type: 'Servicio' },
+            { date: '09/12/25', plant: 'Mixing', route: 'Valle Verde', issue: 'Actitud', detail: 'Operador no quiso subir personal', action: 'Baja', source: 'Laborales', type: 'Conducta' },
+            { date: '09/12/25', plant: 'Mixing', route: 'Analco', issue: 'Manejo', detail: 'Exceso de velocidad en curva', action: 'Compromiso', source: 'Laborales', type: 'Conducta' },
+            { date: '10/12/25', plant: 'Sabritas', route: 'Valle Escondido', issue: 'Desvío de ruta', detail: 'No pasó por la avenida principal', action: 'Retroalimentación', source: 'Sindicato', type: 'Servicio' },
+        ];
+
+        // --- PLANTAS ACTUALIZADAS ---
+        const PLANTS = ['Todas', 'Sabritas', 'Mixing'];
+        
+        const { weeksDef: WEEKS_DEF } = (() => {
+            const dates = []; const weeks = {}; let currentDate = new Date(2025, 10, 16);
+            let weekCounter = 47; let yearForWeek = 2025; let dayCount = 0; let currentWeekKey = '';
+            while (currentDate <= new Date(2026, 11, 31)) {
+                const dateStr = `${currentDate.getDate().toString().padStart(2,'0')}/${(currentDate.getMonth()+1).toString().padStart(2,'0')}/${currentDate.getFullYear().toString().slice(-2)}`;
+                if (dayCount % 7 === 0) {
+                    const k = `S${weekCounter}-${yearForWeek.toString().slice(-2)}`;
+                    weeks[k] = { id: k, label: `Sem ${weekCounter}`, fullLabel: `Semana ${weekCounter} '${yearForWeek.toString().slice(-2)}`, dates: [] };
+                    currentWeekKey = k; weekCounter++; if (weekCounter > 52) { weekCounter = 1; yearForWeek++; }
+                }
+                weeks[currentWeekKey].dates.push(dateStr); dayCount++; currentDate.setDate(currentDate.getDate() + 1);
+            }
+            return { weeksDef: weeks };
+        })();
+
+        // --- CHART COMPONENTS ---
+        const TrendChart = ({ data, dataKey, color, title, suffix = '' }) => {
+            if (!data || data.length === 0) return null;
+            const values = data.map(d => d[dataKey]); const min = Math.min(...values); const max = Math.max(...values);
+            const paddingY = (max - min) * 0.2 || 1; const domainMin = Math.max(0, min - paddingY); const domainMax = max + paddingY; const range = domainMax - domainMin || 1;
+            const width = 250; const height = 100; const margin = 15;
+            const points = data.map((d, i) => `${margin + (i / (data.length - 1)) * (width - 2 * margin)},${height - margin - ((d[dataKey] - domainMin) / range) * (height - 2 * margin)}`).join(" ");
+            const dots = data.map((d, i) => ({ x: margin + (i / (data.length - 1)) * (width - 2 * margin), y: height - margin - ((d[dataKey] - domainMin) / range) * (height - 2 * margin), val: d[dataKey], label: d.label }));
+            return (
+                <div className="flex flex-col items-center w-full bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                    <h5 className="text-sm font-bold text-slate-600 mb-3 uppercase tracking-wider">{title}</h5>
+                    <div className="relative w-full flex justify-center">
+                        <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} className="overflow-visible">
+                            <polyline points={points} fill="none" stroke={color} strokeWidth="3" />
+                            {dots.map((dot, i) => (<g key={i}><circle cx={dot.x} cy={dot.y} r="4" fill="white" stroke={color} strokeWidth="2" /><text x={dot.x} y={dot.y - 12} textAnchor="middle" fontSize="11" fill="#475569" fontWeight="bold">{dot.val}{suffix}</text><text x={dot.x} y={height + 15} textAnchor="middle" fontSize="10" fill="#94a3b8">{dot.label}</text></g>))}
+                        </svg>
+                    </div>
+                </div>
+            );
+        };
+
+        const SimpleDonutChart = ({ data, total, title }) => {
+            if (total === 0) return <div className="h-40 flex items-center justify-center text-slate-300 text-xs">Sin datos</div>;
+            let acc = 0; const r = 40; const c = 50;
+            const segs = data.map(d => {
+                const p = d.val / total; if(p===1) return { d: `M 50 50 m -40, 0 a 40,40 0 1,0 80,0 a 40,40 0 1,0 -80,0`, color: d.color, label: d.label, val: d.val, percent: 100 };
+                const a1 = acc * 360; const a2 = (acc + p) * 360; acc += p;
+                const x1 = c + r * Math.cos(Math.PI * a1 / 180); const y1 = c + r * Math.sin(Math.PI * a1 / 180);
+                const x2 = c + r * Math.cos(Math.PI * a2 / 180); const y2 = c + r * Math.sin(Math.PI * a2 / 180);
+                return { d: `M ${c} ${c} L ${x1} ${y1} A ${r} ${r} 0 ${p > 0.5 ? 1 : 0} 1 ${x2} ${y2} Z`, color: d.color, label: d.label, val: d.val, percent: (p*100).toFixed(0) };
+            });
+            return (
+                <div className="flex flex-col items-center">
+                    <h4 className="text-xs font-bold text-slate-500 mb-2 uppercase">{title}</h4>
+                    <div className="relative w-32 h-32"><svg viewBox="0 0 100 100" className="transform -rotate-90 w-full h-full">{segs.map((s, i) => <path key={i} d={s.d} fill={s.color} stroke="white" strokeWidth="1" />)}<circle cx="50" cy="50" r="25" fill="white" /></svg><div className="absolute inset-0 flex items-center justify-center flex-col"><span className="text-xl font-bold text-slate-700">{total}</span></div></div>
+                    <div className="w-full mt-4 space-y-1">{segs.map((s, i) => s.val > 0 && (<div key={i} className="flex justify-between text-xs items-center"><div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full" style={{backgroundColor: s.color}}></span><span className="text-slate-600">{s.label}</span></div><span className="font-bold text-slate-800">{s.val} ({s.percent}%)</span></div>))}</div>
+                </div>
+            );
+        };
+
+        const SimpleBarChart = ({ data, dataKeys, colors, height = 150 }) => {
+            const max = Math.max(...data.flatMap(d => dataKeys.map(k => d[k])), 1);
+            return (
+                <div className="w-full flex items-end justify-between gap-2" style={{ height: `${height}px` }}>
+                    {data.map((item, i) => (
+                        <div key={i} className="flex-1 flex flex-col items-center h-full justify-end group">
+                            <div className="w-full relative flex items-end justify-center gap-1 h-full bg-slate-50 rounded-t-lg pt-6">
+                                {dataKeys.map((key, k) => {
+                                    const h = (item[key] || 0) / max * 100;
+                                    return <div key={key} className={`w-full max-w-[20px] rounded-t ${colors[k]} relative`} style={{ height: `${item[key]>0 && h<5 ? 5 : h}%` }}>{item[key] > 0 && <span className="absolute -top-5 left-1/2 -translate-x-1/2 text-[10px] font-bold text-slate-600 bg-white/80 px-1 rounded shadow-sm z-10">{item[key]}</span>}</div>
+                                })}
+                            </div>
+                            <div className="mt-2 text-center"><span className="text-[10px] font-bold text-slate-600 block">{item.dayName}</span><span className="text-[9px] text-slate-400 block">{item.date.slice(0,5)}</span></div>
+                        </div>
+                    ))}
+                </div>
+            );
+        };
+
+        // --- KPI CARD ---
+        const KpiCard = ({ title, value, prevValue, icon: Icon, colorClass, higherIsBetter = false, suffix = '' }) => {
+            const diff = value - prevValue; const isPos = diff > 0; const isGood = higherIsBetter ? isPos : !isPos;
+            return (
+                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between h-full">
+                    <div><div className="flex justify-between items-start mb-2"><p className="text-slate-500 text-sm font-medium">{title}</p><div className={`p-1.5 rounded-lg ${colorClass} bg-opacity-10 text-opacity-100`}><Icon /></div></div><h3 className="text-2xl font-bold text-slate-800">{value}<span className="text-base text-slate-400 ml-1">{suffix}</span></h3></div>
+                    {prevValue !== null ? <div className={`flex items-center gap-1 text-xs font-bold mt-2 ${diff === 0 ? 'text-slate-400' : (isGood ? 'text-emerald-500' : 'text-red-500')}`}>{diff > 0 ? <Icons.ArrowUp /> : diff < 0 ? <Icons.ArrowDown /> : <Icons.Minus />}<span>{Math.abs(diff).toFixed(suffix === '%' ? 1 : 0)}{suffix} vs sem ant</span></div> : <div className="text-xs text-slate-300 mt-2">Sin datos previos</div>}
+                </div>
+            );
+        };
+
+        // --- DASHBOARD PRINCIPAL ---
+        const TransportationDashboard = () => {
+            const [incidents, setIncidents] = useState([]);
+            const [complaints, setComplaints] = useState([]);
+            const [isLoading, setIsLoading] = useState(true);
+            const [selectedWeek, setSelectedWeek] = useState('S50-25');
+            const [selectedPlant, setSelectedPlant] = useState('Todas');
+            
+            // Estado para MODALES y EDICIÓN
+            const [isModalOpen, setIsModalOpen] = useState(false);
+            const [editingItem, setEditingItem] = useState(null); // Guarda el objeto completo a editar
+            const [modalTab, setModalTab] = useState('incident'); // Define qué tab abrir en el modal
+            
+            const [notification, setNotification] = useState(null);
+            
+            // --- ESTADO DE AUTENTICACIÓN ---
+            const [isAdmin, setIsAdmin] = useState(false);
+            const [showLogin, setShowLogin] = useState(false);
+            const [passwordInput, setPasswordInput] = useState('');
+            const [loginError, setLoginError] = useState(false);
+
+            useEffect(() => {
+                if (!db) return;
+                const u1 = db.collection("incidents").onSnapshot(s => { setIncidents(s.docs.map(d => ({ id: d.id, ...d.data() }))); setIsLoading(false); });
+                const u2 = db.collection("complaints").onSnapshot(s => { setComplaints(s.docs.map(d => ({ id: d.id, ...d.data() }))); });
+                return () => { u1(); u2(); };
+            }, []);
+
+            const showNotification = (type, message) => { setNotification({ type, message }); setTimeout(() => setNotification(null), 3000); };
+
+            const handleLogin = (e) => {
+                e.preventDefault();
+                if(passwordInput === 'LIPU77'){
+                    setIsAdmin(true); setShowLogin(false); setLoginError(false); setPasswordInput(''); showNotification('success', 'Modo Edición Activado');
+                } else { setLoginError(true); }
+            };
+
+            const calculateWeekStats = (weekKey) => {
+                const w = WEEKS_DEF[weekKey]; if (!w) return null;
+                const fInc = incidents.filter(i => w.dates.includes(i.date) && (selectedPlant === 'Todas' || i.plant === selectedPlant));
+                const fCom = complaints.filter(c => w.dates.includes(c.date) && (selectedPlant === 'Todas' || c.plant === selectedPlant));
+                
+                const aggs = fInc.reduce((acc, c) => ({
+                    imp: acc.imp + (c.imp || 0), noImp: acc.noImp + (c.noImp || 0), lateStarts: acc.lateStarts + (c.lateStarts || 0), accidents: acc.accidents + (c.accidents || 0), slSum: acc.slSum + (c.serviceLevel || 0),
+                    breaks: acc.breaks + (c.breaks || 0), safetySum: acc.safetySum + (c.safetyScore || 0),
+                    c_imp_sleep: acc.c_imp_sleep + (c.causeImpSleep || 0), c_imp_acc: acc.c_imp_acc + (c.causeImpAccident || 0), c_imp_route: acc.c_imp_route + (c.causeImpRoute || 0), c_imp_mech: acc.c_imp_mech + (c.causeImpMech || 0),
+                    c_noimp_traf: acc.c_noimp_traf + (c.causeNoImpTraffic || 0), c_noimp_weath: acc.c_noimp_weath + (c.causeNoImpWeather || 0), c_noimp_closed: acc.c_noimp_closed + (c.causeNoImpClosed || 0), c_noimp_other: acc.c_noimp_other + (c.causeNoImpOther || 0),
+                }), { imp:0, noImp:0, lateStarts:0, accidents:0, slSum:0, breaks:0, safetySum:0, c_imp_sleep:0, c_imp_acc:0, c_imp_route:0, c_imp_mech:0, c_noimp_traf:0, c_noimp_weath:0, c_noimp_closed:0, c_noimp_other:0 });
+
+                return {
+                    weekLabel: w.label, totalImp: aggs.imp, totalNoImp: aggs.noImp, lateStarts: aggs.lateStarts, accidents: aggs.accidents, 
+                    serviceLevel: fInc.length > 0 ? parseFloat((aggs.slSum / fInc.length).toFixed(1)) : 100,
+                    safetyScore: fInc.length > 0 ? parseFloat((aggs.safetySum / fInc.length).toFixed(1)) : 100,
+                    breaks: aggs.breaks, totalComplaints: fCom.length, incidents: fInc, complaints: fCom, dates: w.dates, aggs
+                };
+            };
+
+            const dashboardData = useMemo(() => {
+                const current = calculateWeekStats(selectedWeek);
+                const keys = Object.keys(WEEKS_DEF); const idx = keys.indexOf(selectedWeek);
+                const prev = idx > 0 ? calculateWeekStats(keys[idx - 1]) : null;
+                const trends = keys.slice(Math.max(0, idx - 3), idx + 1).map(k => {
+                    const s = calculateWeekStats(k);
+                    return { label: s ? s.weekLabel : k, serviceLevel: s ? s.serviceLevel : 0, lateStarts: s ? s.lateStarts : 0, imp: s ? s.totalImp : 0, accidents: s ? s.accidents : 0, complaints: s ? s.totalComplaints : 0, safetyScore: s ? s.safetyScore : 0, breaks: s ? s.breaks : 0 };
+                });
+
+                const dailyStats = current ? current.dates.map(d => {
+                    const dayInc = current.incidents.filter(i => i.date === d);
+                    const dt = new Date(d.split('/').reverse().join('-'));
+                    return { 
+                        date: d, dayName: isNaN(dt) ? '-' : dt.toLocaleDateString('es-ES', { weekday: 'short' }).toUpperCase().replace('.',''),
+                        imp: dayInc.reduce((s, i) => s + (i.imp || 0), 0), noImp: dayInc.reduce((s, i) => s + (i.noImp || 0), 0), lateStarts: dayInc.reduce((s, i) => s + (i.lateStarts || 0), 0), accidents: dayInc.reduce((s, i) => s + (i.accidents || 0), 0), breaks: dayInc.reduce((s, i) => s + (i.breaks || 0), 0),
+                        serviceLevel: dayInc.length > 0 ? parseFloat((dayInc.reduce((s, i) => s + i.serviceLevel, 0) / dayInc.length).toFixed(1)) : 100,
+                        safetyScore: dayInc.length > 0 ? parseFloat((dayInc.reduce((s, i) => s + (i.safetyScore || 100), 0) / dayInc.length).toFixed(1)) : 100
+                    };
+                }) : [];
+
+                const complaintReasons = current && current.complaints.length > 0 ? Object.entries(current.complaints.reduce((acc, c) => { acc[c.issue] = (acc[c.issue] || 0) + 1; return acc; }, {})).map(([label, val], i) => ({ label, val, color: ['#a855f7', '#c084fc', '#d8b4fe', '#f3e8ff', '#7e22ce'][i % 5] })) : [];
+
+                return {
+                    current: current || {}, prev: prev || {}, trends, dailyStats, complaintReasons,
+                    causes: {
+                        imp: [{ label: 'Op. Dormido', val: current?.aggs.c_imp_sleep || 0, color: '#f43f5e' }, { label: 'Siniestro', val: current?.aggs.c_imp_acc || 0, color: '#fb7185' }, { label: 'Desvío Ruta', val: current?.aggs.c_imp_route || 0, color: '#fda4af' }, { label: 'Falla Mec.', val: current?.aggs.c_imp_mech || 0, color: '#be123c' }],
+                        noImp: [{ label: 'Tráfico', val: current?.aggs.c_noimp_traf || 0, color: '#64748b' }, { label: 'Calle Cerrada', val: current?.aggs.c_noimp_closed || 0, color: '#475569' }, { label: 'Clima', val: current?.aggs.c_noimp_weath || 0, color: '#94a3b8' }, { label: 'Otros', val: current?.aggs.c_noimp_other || 0, color: '#cbd5e1' }]
+                    }
+                };
+            }, [incidents, complaints, selectedWeek, selectedPlant]);
+
+            const handleDelete = async (coll, id) => { if(confirm("¿Eliminar registro permanentemente?")) { await db.collection(coll).doc(id).delete(); showNotification('success', 'Eliminado'); }};
+
+            // FUNCIONES DE EDICIÓN
+            const handleEdit = (item, type) => {
+                setEditingItem(item);
+                setModalTab(type);
+                setIsModalOpen(true);
+            };
+
+            const handleNew = () => {
+                setEditingItem(null);
+                setModalTab('incident');
+                setIsModalOpen(true);
+            };
+
+            return (
+                <div className="min-h-screen pb-10">
+                    <header className="bg-slate-900 text-white shadow-lg sticky top-0 z-30">
+                        <div className="max-w-7xl mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+                            <div className="flex items-center gap-3"><div className="p-2 bg-rose-600 rounded-lg"><Icons.Truck /></div><div><h1 className="text-xl font-bold flex items-center gap-2">Control Transporte {isLoading && <span className="loader"></span>}</h1><p className="text-xs text-slate-400">Dashboard Interactivo</p></div></div>
+                            <div className="flex gap-3 items-center">
+                                <select className="bg-slate-800 border border-slate-700 rounded px-3 py-1 text-sm" value={selectedWeek} onChange={(e) => setSelectedWeek(e.target.value)}>{Object.values(WEEKS_DEF).map(w => <option key={w.id} value={w.id}>{w.fullLabel}</option>)}</select>
+                                <select className="bg-slate-800 border border-slate-700 rounded px-3 py-1 text-sm" value={selectedPlant} onChange={(e) => setSelectedPlant(e.target.value)}>{PLANTS.map(p => <option key={p} value={p}>{p}</option>)}</select>
+                                {isAdmin ? (
+                                    <>
+                                        <button onClick={handleNew} className="bg-rose-600 hover:bg-rose-700 px-3 py-1 rounded text-sm flex items-center gap-2"><Icons.Plus /> Gestionar</button>
+                                        <button onClick={() => { setIsAdmin(false); showNotification('success', 'Modo Vista Activado'); }} className="bg-slate-700 hover:bg-slate-600 px-3 py-1 rounded text-sm flex items-center gap-2" title="Salir modo admin"><Icons.LogOut /> Salir</button>
+                                    </>
+                                ) : (
+                                    <button onClick={() => setShowLogin(true)} className="bg-slate-800 border border-slate-700 hover:bg-slate-700 px-3 py-1 rounded text-sm flex items-center gap-2 text-slate-300" title="Ingresar como Admin"><Icons.Lock /> Admin</button>
+                                )}
+                            </div>
+                        </div>
+                    </header>
+                    
+                    {notification && <div className={`fixed top-20 right-4 p-4 rounded shadow-lg z-50 text-white ${notification.type === 'success' ? 'bg-emerald-600' : 'bg-red-600'}`}>{notification.message}</div>}
+
+                    {/* LOGIN MODAL */}
+                    {showLogin && (
+                        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                            <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm fade-in">
+                                <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-lg text-slate-800">Acceso Administrador</h3><button onClick={() => { setShowLogin(false); setLoginError(false); setPasswordInput(''); }} className="text-slate-400 hover:text-slate-600"><Icons.X /></button></div>
+                                <form onSubmit={handleLogin} className="space-y-4">
+                                    <div><label className="text-xs font-bold text-slate-500 mb-1 block">Contraseña</label><input type="password" autoFocus value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} className="w-full border rounded p-2 outline-none focus:border-rose-500" placeholder="••••••" />
+                                    {loginError && <p className="text-xs text-red-500 mt-1">Contraseña incorrecta.</p>}</div>
+                                    <button type="submit" className="w-full bg-slate-900 text-white py-2 rounded font-bold hover:bg-slate-800">Ingresar</button>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+
+                    <main className="max-w-7xl mx-auto px-4 py-8 space-y-8">
+                        {/* KPIs */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-4 gap-4">
+                            <KpiCard title="Nivel Servicio" value={dashboardData.current.serviceLevel} prevValue={dashboardData.prev.serviceLevel} icon={Icons.Activity} colorClass="bg-emerald-500 text-emerald-600" higherIsBetter={true} suffix="%" />
+                            <KpiCard title="Score Seguridad" value={dashboardData.current.safetyScore} prevValue={dashboardData.prev.safetyScore} icon={Icons.Shield} colorClass="bg-blue-500 text-blue-600" higherIsBetter={true} suffix="%" />
+                            <KpiCard title="Inicios Tarde" value={dashboardData.current.lateStarts} prevValue={dashboardData.prev.lateStarts} icon={Icons.Clock} colorClass="bg-amber-500 text-amber-600" />
+                            <KpiCard title="Descansos" value={dashboardData.current.breaks} prevValue={dashboardData.prev.breaks} icon={Icons.Coffee} colorClass="bg-cyan-500 text-cyan-600" higherIsBetter={true} suffix="" />
+                            <KpiCard title="Fallas Imputables" value={dashboardData.current.totalImp || 0} prevValue={dashboardData.prev.totalImp} icon={Icons.BarChart2} colorClass="bg-rose-500 text-rose-600" />
+                            <KpiCard title="Percances" value={dashboardData.current.accidents} prevValue={dashboardData.prev.accidents} icon={Icons.AlertOctagon} colorClass="bg-orange-500 text-orange-600" />
+                             <KpiCard title="Quejas" value={dashboardData.current.totalComplaints} prevValue={dashboardData.prev.totalComplaints} icon={Icons.MessageSquare} colorClass="bg-purple-500 text-purple-600" />
+                        </div>
+
+                        {/* GRÁFICAS PRINCIPALES */}
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                                <h3 className="font-bold mb-6 flex gap-2 items-center"><span className="text-slate-500"><Icons.BarChart2 /></span> Fallas Semanales</h3>
+                                <SimpleBarChart data={dashboardData.dailyStats} dataKeys={['noImp', 'imp']} colors={['bg-slate-400', 'bg-rose-500']} height={200} />
+                            </div>
+                            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                                <h3 className="font-bold mb-4 flex gap-2 items-center"><span className="text-slate-500"><Icons.PieChart /></span> Causas (Semanal)</h3>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <SimpleDonutChart title="Imputables" total={dashboardData.current.totalImp || 0} data={dashboardData.causes.imp} />
+                                    <SimpleDonutChart title="No Imp" total={dashboardData.current.totalNoImp || 0} data={dashboardData.causes.noImp} />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* GRÁFICAS DETALLE (DIARIO) */}
+                        <div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                                <div className="bg-white p-4 rounded-xl border shadow-sm">
+                                    <h3 className="font-bold mb-4 flex gap-2 items-center text-sm"><span className="text-emerald-500"><Icons.Activity /></span> Nivel Servicio (Diario)</h3>
+                                    <div className="w-full flex items-end justify-between gap-2 h-[150px]">
+                                        {dashboardData.dailyStats.map((item, idx) => (
+                                            <div key={idx} className="flex-1 flex flex-col items-center h-full justify-end group">
+                                                <div className="w-full max-w-[20px] bg-slate-100 rounded-t relative h-full flex items-end pt-5">
+                                                    <div className={`w-full rounded-t transition-all ${item.serviceLevel >= 98 ? 'bg-emerald-500' : 'bg-red-500'}`} style={{ height: `${item.serviceLevel > 90 ? (item.serviceLevel - 80) * 5 : item.serviceLevel}%` }}></div>
+                                                    <span className="absolute -top-5 left-1/2 -translate-x-1/2 text-[9px] font-bold bg-white px-1 rounded shadow">{item.serviceLevel}%</span>
+                                                </div>
+                                                <div className="mt-2 text-center"><span className="text-[10px] font-bold text-slate-600 block">{item.dayName}</span><span className="text-[9px] text-slate-400 block">{item.date.slice(0,5)}</span></div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="bg-white p-4 rounded-xl border shadow-sm">
+                                    <h3 className="font-bold mb-4 flex gap-2 items-center text-sm"><span className="text-blue-500"><Icons.Shield /></span> Score Seguridad (Diario)</h3>
+                                    <div className="w-full flex items-end justify-between gap-2 h-[150px]">
+                                        {dashboardData.dailyStats.map((item, idx) => (
+                                            <div key={idx} className="flex-1 flex flex-col items-center h-full justify-end group">
+                                                <div className="w-full max-w-[20px] bg-slate-100 rounded-t relative h-full flex items-end pt-5">
+                                                    <div className={`w-full rounded-t transition-all bg-blue-500`} style={{ height: `${item.safetyScore > 80 ? (item.safetyScore - 70) * 3.3 : item.safetyScore}%` }}></div>
+                                                    <span className="absolute -top-5 left-1/2 -translate-x-1/2 text-[9px] font-bold bg-white px-1 rounded shadow">{item.safetyScore}%</span>
+                                                </div>
+                                                <div className="mt-2 text-center"><span className="text-[10px] font-bold text-slate-600 block">{item.dayName}</span><span className="text-[9px] text-slate-400 block">{item.date.slice(0,5)}</span></div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                                <div className="bg-white p-4 rounded-xl border shadow-sm"><h3 className="font-bold mb-4 flex gap-2 items-center text-sm"><span className="text-amber-500"><Icons.Clock /></span> Inicios Tarde</h3><SimpleBarChart data={dashboardData.dailyStats} dataKeys={['lateStarts']} colors={['bg-amber-400']} height={150} /></div>
+                                <div className="bg-white p-4 rounded-xl border shadow-sm"><h3 className="font-bold mb-4 flex gap-2 items-center text-sm"><span className="text-orange-500"><Icons.AlertOctagon /></span> Percances</h3><SimpleBarChart data={dashboardData.dailyStats} dataKeys={['accidents']} colors={['bg-orange-400']} height={150} /></div>
+                                <div className="bg-white p-4 rounded-xl border shadow-sm"><h3 className="font-bold mb-4 flex gap-2 items-center text-sm"><span className="text-cyan-500"><Icons.Coffee /></span> Descansos</h3><SimpleBarChart data={dashboardData.dailyStats} dataKeys={['breaks']} colors={['bg-cyan-400']} height={150} /></div>
+                            </div>
+                        </div>
+
+                        {/* TENDENCIAS */}
+                        <div>
+                            <h3 className="text-lg font-bold text-slate-700 mb-4 flex items-center gap-2"><span className="bg-slate-200 p-1 rounded"><Icons.BarChart2 /></span> Tendencias (Últimas 4 Semanas)</h3>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                                <TrendChart title="Nivel Servicio" data={dashboardData.trends} dataKey="serviceLevel" color="#10b981" suffix="%" />
+                                <TrendChart title="Score Seguridad" data={dashboardData.trends} dataKey="safetyScore" color="#3b82f6" suffix="%" />
+                                <TrendChart title="Descansos" data={dashboardData.trends} dataKey="breaks" color="#06b6d4" />
+                                <TrendChart title="Inicios Tarde" data={dashboardData.trends} dataKey="lateStarts" color="#f59e0b" />
+                                <TrendChart title="Fallas Imp." data={dashboardData.trends} dataKey="imp" color="#f43f5e" />
+                                <TrendChart title="Percances" data={dashboardData.trends} dataKey="accidents" color="#f97316" />
+                                <TrendChart title="Quejas" data={dashboardData.trends} dataKey="complaints" color="#a855f7" />
+                            </div>
+                        </div>
+
+                        {/* --- TABLAS Y GRÁFICAS DE GESTIÓN --- */}
+                        <div className="space-y-6">
+                            
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                                    <div className="p-4 bg-slate-50 font-bold border-b flex justify-between"><span className="flex gap-2 items-center"><span className="text-purple-500"><Icons.MessageSquare /></span> Quejas</span> <span className="text-xs bg-purple-100 px-2 py-1 rounded-full">{dashboardData.current.complaints ? dashboardData.current.complaints.length : 0}</span></div>
+                                    <div className="max-h-60 overflow-y-auto">
+                                        <table className="w-full text-sm text-left">
+                                            <thead className="sticky top-0 bg-slate-50 text-slate-500"><tr><th className="p-3">Fecha</th><th className="p-3">Ruta</th><th className="p-3">Motivo / Detalle</th><th className="p-3">Acción</th>{isAdmin && <th></th>}</tr></thead>
+                                            <tbody className="divide-y">
+                                                {dashboardData.current.complaints && dashboardData.current.complaints.map(c => (
+                                                    <tr key={c.id}>
+                                                        <td className="p-3 text-slate-500 align-top">{c.date.slice(0,5)}</td>
+                                                        <td className="p-3 align-top font-medium">{c.route}</td>
+                                                        <td className="p-3 align-top"><div className="text-slate-800 font-bold">{c.issue}</div><div className="text-xs text-slate-500 mt-1 italic">"{c.detail}"</div></td>
+                                                        <td className="p-3 align-top text-xs"><span className="bg-slate-100 px-2 py-1 rounded border border-slate-200">{c.action || '-'}</span></td>
+                                                        {isAdmin && <td className="p-3 align-top text-right min-w-[80px]">
+                                                            <button onClick={() => handleEdit(c, 'complaint')} className="text-blue-400 hover:text-blue-600 mr-2" title="Editar"><Icons.Edit /></button>
+                                                            <button onClick={()=>handleDelete('complaints', c.id)} className="text-red-300 hover:text-red-500" title="Eliminar"><Icons.Trash2 /></button>
+                                                        </td>}
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                                <div className="lg:col-span-1 bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col justify-center">
+                                    <SimpleDonutChart title="Motivos de Quejas" total={dashboardData.current.totalComplaints || 0} data={dashboardData.complaintReasons} />
+                                </div>
+                            </div>
+
+                            {/* TABLA DE REPORTES (ABAJO Y ANCHO COMPLETO) - SOLO VISIBLE PARA ADMIN */}
+                            {isAdmin && (
+                                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden fade-in">
+                                    <div className="p-4 bg-slate-50 font-bold border-b flex justify-between items-center"><span className="flex gap-2 items-center"><span className="text-rose-500"><Icons.AlertTriangle /></span> Reportes Diarios (Admin)</span> <span className="text-xs bg-rose-100 text-rose-700 px-2 py-1 rounded-full">{dashboardData.current.incidents ? dashboardData.current.incidents.length : 0}</span></div>
+                                    <div className="max-h-60 overflow-y-auto">
+                                        <table className="w-full text-sm text-left">
+                                            <thead className="sticky top-0 bg-slate-50 text-slate-500 shadow-sm z-10">
+                                                <tr>
+                                                    <th className="p-3">Fecha</th>
+                                                    <th className="p-3">Planta</th>
+                                                    <th className="p-3 text-center">Fallas</th>
+                                                    <th className="p-3 text-center">N.S.</th>
+                                                    <th className="p-3 text-center bg-blue-50 text-blue-600">Seg%</th>
+                                                    <th className="p-3 text-center bg-cyan-50 text-cyan-600">Desc.</th>
+                                                    {/* NUEVAS COLUMNAS SOLICITADAS */}
+                                                    <th className="p-3 text-center bg-amber-50 text-amber-600">I.T.</th>
+                                                    <th className="p-3 text-center bg-orange-50 text-orange-600">Perc.</th>
+                                                    {isAdmin && <th className="p-3"></th>}
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y">
+                                                {dashboardData.current.incidents && dashboardData.current.incidents.map(inc => (
+                                                    <tr key={inc.id} className="hover:bg-slate-50">
+                                                        <td className="p-3 text-slate-600 font-medium">{inc.date.slice(0,5)}</td>
+                                                        <td className="p-3"><div className="font-bold text-slate-700">{inc.plant}</div><div className="text-xs text-slate-400">{inc.shift}</div></td>
+                                                        <td className="p-3 text-center"><span className="font-bold text-red-700">{inc.imp}</span> / <span className="text-slate-600 font-bold">{inc.noImp}</span></td>
+                                                        <td className="p-3 text-center"><span className={`font-bold ${inc.serviceLevel >= 98 ? 'text-emerald-600' : 'text-red-600'}`}>{inc.serviceLevel}%</span></td>
+                                                        <td className="p-3 text-center font-bold text-blue-600 bg-blue-50/30">{inc.safetyScore || 100}%</td>
+                                                        <td className="p-3 text-center font-bold text-cyan-600 bg-cyan-50/30">{inc.breaks || 0}</td>
+                                                        {/* NUEVOS DATOS EN LA TABLA */}
+                                                        <td className="p-3 text-center font-bold text-amber-600 bg-amber-50/30">{inc.lateStarts || 0}</td>
+                                                        <td className="p-3 text-center font-bold text-orange-600 bg-orange-50/30">{inc.accidents || 0}</td>
+                                                        {isAdmin && <td className="p-3 text-right min-w-[80px]">
+                                                            {/* BOTÓN DE EDITAR */}
+                                                            <button onClick={() => handleEdit(inc, 'incident')} className="text-blue-400 hover:text-blue-600 mr-2" title="Editar"><Icons.Edit /></button>
+                                                            <button onClick={()=>handleDelete('incidents', inc.id)} className="text-slate-300 hover:text-red-500" title="Eliminar"><Icons.Trash2 /></button>
+                                                        </td>}
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
+
+                        </div>
+                    </main>
+
+                    {/* MODAL FORM */}
+                    {isModalOpen && (
+                        <ModalForm 
+                            close={() => setIsModalOpen(false)} 
+                            plants={PLANTS.filter(p => p !== 'Todas')}
+                            initialData={editingItem}
+                            initialTab={modalTab}
+                            onSaveIncident={(data) => {
+                                const [y, m, d] = data.date.split('-');
+                                const imp = (parseInt(data.causeImpSleep)||0) + (parseInt(data.causeImpAccident)||0) + (parseInt(data.causeImpRoute)||0) + (parseInt(data.causeImpMech)||0);
+                                const noImp = (parseInt(data.causeNoImpTraffic)||0) + (parseInt(data.causeNoImpWeather)||0) + (parseInt(data.causeNoImpClosed)||0) + (parseInt(data.causeNoImpOther)||0);
+                                
+                                const payload = { 
+                                    ...data, 
+                                    date: `${d}/${m}/${y.slice(-2)}`, 
+                                    imp, noImp, 
+                                    lateStarts: parseInt(data.lateStarts)||0, 
+                                    serviceLevel: parseFloat(data.serviceLevel)||100, 
+                                    safetyScore: parseFloat(data.safetyScore)||100,
+                                    breaks: parseInt(data.breaks)||0,
+                                    accidents: parseInt(data.accidents)||0,
+                                    causeImpSleep: parseInt(data.causeImpSleep)||0, causeImpAccident: parseInt(data.causeImpAccident)||0, causeImpRoute: parseInt(data.causeImpRoute)||0, causeImpMech: parseInt(data.causeImpMech)||0,
+                                    causeNoImpTraffic: parseInt(data.causeNoImpTraffic)||0, causeNoImpWeather: parseInt(data.causeNoImpWeather)||0, causeNoImpClosed: parseInt(data.causeNoImpClosed)||0, causeNoImpOther: parseInt(data.causeNoImpOther)||0
+                                };
+
+                                if (editingItem) {
+                                    // MODO EDICION
+                                    db.collection("incidents").doc(editingItem.id).update(payload);
+                                    showNotification('success', 'Registro Actualizado');
+                                } else {
+                                    // MODO CREACION
+                                    db.collection("incidents").add(payload);
+                                    showNotification('success', 'Guardado');
+                                }
+                                setIsModalOpen(false); 
+                            }}
+                            onSaveComplaint={(data) => {
+                                const [y, m, d] = data.date.split('-');
+                                const payload = { ...data, date: `${d}/${m}/${y.slice(-2)}` };
+                                
+                                if (editingItem) {
+                                     db.collection("complaints").doc(editingItem.id).update(payload);
+                                     showNotification('success', 'Queja Actualizada');
+                                } else {
+                                    db.collection("complaints").add(payload);
+                                    showNotification('success', 'Guardado');
+                                }
+                                setIsModalOpen(false); 
+                            }}
+                            onSeed={async () => { 
+                                const batch = db.batch();
+                                DEMO_INCIDENTS.forEach(inc => { batch.set(db.collection("incidents").doc(), inc); });
+                                DEMO_COMPLAINTS.forEach(cmp => { batch.set(db.collection("complaints").doc(), cmp); });
+                                await batch.commit();
+                                setIsModalOpen(false);
+                                showNotification('success', 'Datos Demo Cargados');
+                            }}
+                        />
+                    )}
+                </div>
+            );
+        };
+
+        const ModalForm = ({ close, plants, onSaveIncident, onSaveComplaint, onSeed, initialData, initialTab }) => {
+            const [tab, setTab] = useState(initialTab || 'incident'); 
+            
+            // Si hay initialData, formatea la fecha de DD/MM/YY a YYYY-MM-DD para el input type="date"
+            const parseDate = (dStr) => {
+                if(!dStr) return new Date().toISOString().split('T')[0];
+                const [d, m, y] = dStr.split('/');
+                return `20${y}-${m}-${d}`;
+            };
+
+            const [formData, setFormData] = useState({ 
+                date: initialData ? parseDate(initialData.date) : new Date().toISOString().split('T')[0], 
+                plant: initialData?.plant || 'Sabritas', 
+                shift: initialData?.shift || 'T1', 
+                serviceLevel: initialData?.serviceLevel || 99.0, 
+                safetyScore: initialData?.safetyScore || 100, 
+                breaks: initialData?.breaks || 0, 
+                lateStarts: initialData?.lateStarts || 0, 
+                accidents: initialData?.accidents || 0, 
+                causeImpSleep: initialData?.causeImpSleep || 0, causeImpAccident: initialData?.causeImpAccident || 0, causeImpRoute: initialData?.causeImpRoute || 0, causeImpMech: initialData?.causeImpMech || 0, 
+                causeNoImpTraffic: initialData?.causeNoImpTraffic || 0, causeNoImpWeather: initialData?.causeNoImpWeather || 0, causeNoImpClosed: initialData?.causeNoImpClosed || 0, causeNoImpOther: initialData?.causeNoImpOther || 0, 
+                
+                // Campos de Queja
+                route: initialData?.route || '', 
+                issue: initialData?.issue || 'Retraso', 
+                detail: initialData?.detail || '', 
+                action: initialData?.action || '', 
+                source: initialData?.source || 'Laborales', 
+                type: initialData?.type || 'Servicio' 
+            });
+
+            const handleChange = (e) => setFormData(p => ({ ...p, [e.target.name]: e.target.value }));
+            
+            return (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]">
+                        <div className="bg-slate-900 p-4 flex justify-between text-white"><h2 className="font-bold flex gap-2"><Icons.Plus/> {initialData ? 'Editar Registro' : 'Nuevo Registro'}</h2><button onClick={close}><Icons.X/></button></div>
+                        <div className="flex border-b">
+                            {/* Deshabilita el cambio de pestaña si estamos editando para evitar confusiones */}
+                            <button onClick={()=>!initialData && setTab('incident')} className={`flex-1 py-3 font-bold ${tab==='incident'?'text-rose-600 border-b-2 border-rose-600':'text-slate-500'} ${initialData && 'cursor-not-allowed opacity-50'}`}>Reporte</button>
+                            <button onClick={()=>!initialData && setTab('complaint')} className={`flex-1 py-3 font-bold ${tab==='complaint'?'text-rose-600 border-b-2 border-rose-600':'text-slate-500'} ${initialData && 'cursor-not-allowed opacity-50'}`}>Queja</button>
+                        </div>
+                        <div className="p-6 overflow-y-auto"><form id="f" onSubmit={(e)=>{e.preventDefault(); tab==='incident'?onSaveIncident(formData):onSaveComplaint(formData)}} className="space-y-4">
+                            <div className="grid grid-cols-2 gap-4"><div><label className="text-xs font-bold text-slate-500">Fecha</label><input type="date" name="date" required value={formData.date} onChange={handleChange} className="w-full border rounded p-2 text-sm"/></div><div><label className="text-xs font-bold text-slate-500">Planta</label><select name="plant" value={formData.plant} onChange={handleChange} className="w-full border rounded p-2 text-sm">{plants.map(p=><option key={p}>{p}</option>)}</select></div></div>
+                            {tab === 'incident' ? (
+                                <>
+                                    <div className="grid grid-cols-2 gap-4 bg-slate-50 p-3 rounded border mb-2">
+                                         <div><label className="text-xs font-bold text-emerald-600">Nivel Servicio %</label><input type="number" step="0.1" name="serviceLevel" value={formData.serviceLevel} onChange={handleChange} className="w-full border rounded p-1 text-sm font-bold text-emerald-600"/></div>
+                                         <div><label className="text-xs font-bold text-blue-600">Score Seguridad %</label><input type="number" step="0.1" name="safetyScore" value={formData.safetyScore} onChange={handleChange} className="w-full border rounded p-1 text-sm font-bold text-blue-600"/></div>
+                                    </div>
+                                    <div className="grid grid-cols-4 gap-2 bg-slate-50 p-3 rounded border">
+                                        <div><label className="text-xs font-bold text-slate-500">Turno</label><select name="shift" value={formData.shift} onChange={handleChange} className="w-full border rounded p-1 text-sm"><option>T1</option><option>T2</option><option>T3</option></select></div>
+                                        <div><label className="text-xs font-bold text-slate-500">Inicios Tarde</label><input type="number" name="lateStarts" value={formData.lateStarts} onChange={handleChange} className="w-full border rounded p-1 text-sm"/></div>
+                                        <div><label className="text-xs font-bold text-slate-500">Percances</label><input type="number" name="accidents" value={formData.accidents} onChange={handleChange} className="w-full border rounded p-1 text-sm"/></div>
+                                        <div><label className="text-xs font-bold text-slate-500">Descansos</label><input type="number" name="breaks" value={formData.breaks} onChange={handleChange} className="w-full border rounded p-1 text-sm"/></div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4 mt-2">
+                                        <div className="border-rose-100 border p-2 bg-rose-50/50 rounded"><h4 className="text-xs font-bold text-rose-600 mb-2">Imputables</h4><div className="space-y-2">
+                                            <div className="flex justify-between items-center"><label className="text-xs">Op. Dormido</label><input type="number" name="causeImpSleep" value={formData.causeImpSleep} onChange={handleChange} className="w-12 border rounded text-center text-sm"/></div>
+                                            <div className="flex justify-between items-center"><label className="text-xs">Siniestro</label><input type="number" name="causeImpAccident" value={formData.causeImpAccident} onChange={handleChange} className="w-12 border rounded text-center text-sm"/></div>
+                                            <div className="flex justify-between items-center"><label className="text-xs">Desvío Ruta</label><input type="number" name="causeImpRoute" value={formData.causeImpRoute} onChange={handleChange} className="w-12 border rounded text-center text-sm"/></div>
+                                            <div className="flex justify-between items-center"><label className="text-xs">Falla Mec.</label><input type="number" name="causeImpMech" value={formData.causeImpMech} onChange={handleChange} className="w-12 border rounded text-center text-sm"/></div>
+                                        </div></div>
+                                        <div className="border-slate-200 border p-2 bg-slate-50 rounded"><h4 className="text-xs font-bold text-slate-500 mb-2">No Imputables</h4><div className="space-y-2">
+                                            <div className="flex justify-between items-center"><label className="text-xs">Tráfico</label><input type="number" name="causeNoImpTraffic" value={formData.causeNoImpTraffic} onChange={handleChange} className="w-12 border rounded text-center text-sm"/></div>
+                                            <div className="flex justify-between items-center"><label className="text-xs">Calle Cerrada</label><input type="number" name="causeNoImpClosed" value={formData.causeNoImpClosed} onChange={handleChange} className="w-12 border rounded text-center text-sm"/></div>
+                                            <div className="flex justify-between items-center"><label className="text-xs">Clima</label><input type="number" name="causeNoImpWeather" value={formData.causeNoImpWeather} onChange={handleChange} className="w-12 border rounded text-center text-sm"/></div>
+                                            <div className="flex justify-between items-center"><label className="text-xs">Otros</label><input type="number" name="causeNoImpOther" value={formData.causeNoImpOther} onChange={handleChange} className="w-12 border rounded text-center text-sm"/></div>
+                                        </div></div>
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <input type="text" name="route" placeholder="Ruta" value={formData.route} onChange={handleChange} className="w-full border rounded p-2 text-sm"/>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <select name="issue" value={formData.issue} onChange={handleChange} className="w-full border rounded p-2 text-sm">
+                                            <option>Actitud</option>
+                                            <option>Retraso</option>
+                                            <option>Falla de unidad</option>
+                                            <option>Manejo</option>
+                                            <option>Desvío de ruta</option>
+                                        </select>
+                                        <select name="source" value={formData.source} onChange={handleChange} className="w-full border rounded p-2 text-sm"><option>Laborales</option><option>Sindicato</option></select>
+                                    </div>
+                                    <div><label className="text-xs font-bold text-slate-500">Acción Tomada</label><input type="text" name="action" placeholder="Ej. Acta administrativa, Compromiso..." value={formData.action} onChange={handleChange} className="w-full border rounded p-2 text-sm"/></div>
+                                    <textarea name="detail" placeholder="Detalle de la queja..." rows="3" value={formData.detail} onChange={handleChange} className="w-full border rounded p-2 text-sm"></textarea>
+                                </>
+                            )}
+                        </form></div>
+                        <div className="p-4 border-t bg-slate-50 flex justify-between">
+                            {!initialData ? <button type="button" onClick={onSeed} className="text-xs text-slate-400 flex gap-1 items-center"><Icons.CloudUpload/> Demo</button> : <div></div>}
+                            <div className="flex gap-2"><button onClick={close} className="px-4 py-2 rounded text-sm hover:bg-slate-200">Cancelar</button><button type="submit" form="f" className="px-4 py-2 rounded text-sm bg-rose-600 text-white hover:bg-rose-700 shadow">{initialData ? 'Actualizar' : 'Guardar'}</button></div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = createRoot(document.getElementById('root'));
+        root.render(<TransportationDashboard />);
+    </script>
+</body>
+</html>
